@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>IoT Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; background: #0f172a; color: #fff; padding: 24px; }
+    h1 { text-align: center; margin-bottom: 24px; color: #38bdf8; }
+    .cards { display: flex; gap: 16px; justify-content: center; margin-bottom: 32px; }
+    .card { background: #1e293b; border-radius: 12px; padding: 20px 32px; text-align: center; min-width: 160px; }
+    .card .value { font-size: 32px; font-weight: 700; color: #38bdf8; }
+    .card .label { font-size: 13px; color: #94a3b8; margin-top: 4px; }
+    .charts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    .chart-box { background: #1e293b; border-radius: 12px; padding: 16px; }
+    .status { text-align: center; margin-bottom: 16px; font-size: 13px; color: #94a3b8; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; margin-right: 6px; animation: blink 1s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  </style>
+</head>
+<body>
+  <h1>🌡️ IoT Sensör Dashboard</h1>
+  <div class="status"><span class="dot"></span>Canlı veri akışı</div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="value" id="temp">--</div>
+      <div class="label">Sıcaklık (°C)</div>
+    </div>
+    <div class="card">
+      <div class="value" id="hum">--</div>
+      <div class="label">Nem (%)</div>
+    </div>
+    <div class="card">
+      <div class="value" id="pres">--</div>
+      <div class="label">Basınç (hPa)</div>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="chart-box"><canvas id="tempChart"></canvas></div>
+    <div class="chart-box"><canvas id="humChart"></canvas></div>
+    <div class="chart-box"><canvas id="presChart"></canvas></div>
+  </div>
+
+  <script>
+    const MAX = 20;
+    const labels = [];
+
+    function makeChart(id, label, color) {
+      return new Chart(document.getElementById(id), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{ label, data: [], borderColor: color, backgroundColor: color + '22', tension: 0.4, pointRadius: 2, fill: true }]
+        },
+        options: {
+          animation: false,
+          plugins: { legend: { labels: { color: '#94a3b8' } } },
+          scales: {
+            x: { ticks: { color: '#94a3b8', maxTicksLimit: 6 }, grid: { color: '#334155' } },
+            y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
+          }
+        }
+      });
+    }
+
+    const tempChart = makeChart('tempChart', 'Sıcaklık °C', '#f97316');
+    const humChart  = makeChart('humChart',  'Nem %',       '#38bdf8');
+    const presChart = makeChart('presChart', 'Basınç hPa',  '#a78bfa');
+
+    function push(chart, value) {
+      chart.data.datasets[0].data.push(value);
+      if (chart.data.datasets[0].data.length > MAX) chart.data.datasets[0].data.shift();
+      chart.update();
+    }
+
+    const ws = new WebSocket('ws://localhost:8080');
+
+    ws.onopen = () => console.log('Bağlandı');
+    ws.onmessage = (e) => {
+      const d = JSON.parse(e.data);
+      const t = new Date(d.timestamp).toLocaleTimeString();
+
+      if (labels.length >= MAX) labels.shift();
+      labels.push(t);
+
+      document.getElementById('temp').textContent = d.temperature;
+      document.getElementById('hum').textContent  = d.humidity;
+      document.getElementById('pres').textContent = d.pressure;
+
+      push(tempChart, parseFloat(d.temperature));
+      push(humChart,  parseFloat(d.humidity));
+      push(presChart, parseFloat(d.pressure));
+    };
+  </script>
+</body>
+</html>
